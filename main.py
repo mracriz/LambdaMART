@@ -65,7 +65,7 @@ def detect_framework(config: Dict[str, Any]) -> str:
 
 
 def perform_hyperparameter_tuning(config, train_features, train_labels, train_qids,
-                                 test_features, test_labels, test_qids, evaluator, mlflow_manager):
+                                 test_features, test_labels, test_qids, evaluator, mlflow_manager, framework="xgboost"):
     """
     Realizar tuning de hiperparâmetros.
     """
@@ -83,7 +83,7 @@ def perform_hyperparameter_tuning(config, train_features, train_labels, train_qi
     param_values = list(search_space.values())
     param_combinations = list(itertools.product(*param_values))
     
-    print(f"🔍 Testando {len(param_combinations)} combinações de parâmetros...")
+    print(f"🔍 Testando {len(param_combinations)} combinações de parâmetros para {framework.upper()}...")
     
     best_score = 0.0
     best_params = None
@@ -98,15 +98,20 @@ def perform_hyperparameter_tuning(config, train_features, train_labels, train_qi
         print(f"\n🧪 Trial {i+1}/{len(param_combinations)}: {current_params}")
         
         # Iniciar run do MLflow para este trial
-        trial_run_name = f"trial_{i+1}_{current_params}"
+        trial_run_name = f"trial_{i+1}_{framework}_{current_params}"
         trial_run_id = mlflow_manager.start_run(
             run_name=trial_run_name,
-            tags={"tuning_trial": str(i+1), "source": "hyperparameter_tuning"}
+            tags={"tuning_trial": str(i+1), "source": "hyperparameter_tuning", "framework": framework}
         )
         
         try:
-            # Treinar modelo com parâmetros atuais
-            trial_model = LambdaMARTModel(trial_params)
+            # Treinar modelo com parâmetros atuais baseado no framework
+            if framework == "lightgbm":
+                from src.model_lightgbm import LightGBMLambdaMART
+                trial_model = LightGBMLambdaMART(trial_params)
+            else:
+                trial_model = LambdaMARTModel(trial_params)
+            
             trial_model.train(
                 train_features, train_labels, train_qids,
                 num_boost_round=config['training']['num_boost_round'],
@@ -209,11 +214,10 @@ def train_and_evaluate(config: Dict[str, Any], framework: str = "xgboost") -> Di
             print("="*60)
     
     elif framework == "lightgbm":
-        # Para LightGBM, converter parâmetros XGBoost para LightGBM
-        lightgbm_params = convert_xgboost_to_lightgbm_params(config['model'])
+        # Para LightGBM, usar implementação nativa
         try:
-            from lightgbm_model import LightGBMLambdaMARTModel
-            model = LightGBMLambdaMARTModel(lightgbm_params)
+            from src.model_lightgbm import LightGBMLambdaMART
+            model = LightGBMLambdaMART(config['model'])
         except ImportError:
             print("⚠️ LightGBM não disponível. Usando XGBoost.")
             model = LambdaMARTModel(config['model'])
@@ -224,7 +228,7 @@ def train_and_evaluate(config: Dict[str, Any], framework: str = "xgboost") -> Di
         print("🔧 Hyperparameter tuning habilitado!")
         best_model, best_params, best_score = perform_hyperparameter_tuning(
             config, train_features, train_labels, train_qids,
-            test_features, test_labels, test_qids, evaluator, mlflow_manager
+            test_features, test_labels, test_qids, evaluator, mlflow_manager, framework
         )
         model = best_model
         print(f"🏆 Melhor NDCG@10: {best_score:.4f}")

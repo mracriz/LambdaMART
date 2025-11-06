@@ -127,13 +127,23 @@ class LightGBMLambdaMART(BaseLambdaMART):
         Returns:
             LightGBM Dataset
         """
-        # Calculate query group sizes
-        unique_qids, group_sizes = np.unique(query_ids, return_counts=True)
+        # Ensure data is sorted by query_id (required for LightGBM ranking)
+        sort_indices = np.argsort(query_ids)
+        sorted_features = features[sort_indices]
+        sorted_labels = labels[sort_indices]
+        sorted_qids = query_ids[sort_indices]
+        
+        # Calculate query group sizes in order
+        unique_qids, group_sizes = np.unique(sorted_qids, return_counts=True)
+        
+        # Verify group sizes match data length
+        if np.sum(group_sizes) != len(sorted_labels):
+            raise ValueError(f"Group sizes sum ({np.sum(group_sizes)}) doesn't match data length ({len(sorted_labels)})")
         
         # Create LightGBM dataset
         train_data = lgb.Dataset(
-            features, 
-            label=labels,
+            sorted_features, 
+            label=sorted_labels,
             group=group_sizes
         )
         
@@ -168,7 +178,11 @@ class LightGBMLambdaMART(BaseLambdaMART):
         valid_sets = [train_data]
         valid_names = ['train']
         
-        if validation_features is not None and validation_labels is not None and validation_qids is not None:
+        use_validation = (validation_features is not None and 
+                         validation_labels is not None and 
+                         validation_qids is not None)
+        
+        if use_validation:
             valid_data = self.prepare_training_data(validation_features, validation_labels, validation_qids)
             valid_sets.append(valid_data)
             valid_names.append('valid')
@@ -177,26 +191,36 @@ class LightGBMLambdaMART(BaseLambdaMART):
         
         # Training callbacks
         callbacks = []
-        if early_stopping_rounds:
+        # Only use early stopping if we have validation data
+        if early_stopping_rounds and use_validation:
             callbacks.append(lgb.early_stopping(early_stopping_rounds))
         
         # Train model
-        self.model = lgb.train(
-            self.params,
-            train_data,
-            num_boost_round=num_boost_round,
-            valid_sets=valid_sets,
-            valid_names=valid_names,
-            callbacks=callbacks
-        )
+        if use_validation:
+            self.model = lgb.train(
+                self.params,
+                train_data,
+                num_boost_round=num_boost_round,
+                valid_sets=[train_data, valid_data],
+                valid_names=['train', 'valid'],
+                callbacks=callbacks
+            )
+        else:
+            # Train without early stopping when no validation data
+            self.model = lgb.train(
+                self.params,
+                train_data,
+                num_boost_round=num_boost_round
+            )
         
         # Store feature importance
         self.feature_importance = self.model.feature_importance(importance_type='gain')
         
-        # Store training history
-        self.training_history = self.model.eval_train() if hasattr(self.model, 'eval_train') else None
+        # Skip training history due to LightGBM compatibility issues
+        self.training_history = None
         
-        print(f"Training completed. Best iteration: {self.model.best_iteration}")
+        best_iteration = getattr(self.model, 'best_iteration', num_boost_round)
+        print(f"Training completed. Used {self.model.num_trees()} trees")
         
         return {
             'model': self.model,
