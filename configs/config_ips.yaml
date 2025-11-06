@@ -1,0 +1,104 @@
+# Configuração para treinamento do modelo LambdaMART com IPS (Inverse Propensity Scoring)
+# Para remover viés de dados de clique brutos
+
+# Configurações de dados
+data:
+  train_dir: "/Users/david/Documents/data/goldenset_paper/svm-format/copy/IPS"          # Diretório com arquivos de treino (.txt) ou arquivo único
+  test_dir: "/Users/david/Documents/data/goldenset_paper/colecao_manual.txt"            # Diretório com arquivos de teste (.txt) ou arquivo único
+
+# Configurações do MLflow
+mlflow:
+  experiment_name: "LambdaMART_IPS_copy"  # Nome do experimento para IPS
+  tracking_uri: null               # URI do tracking server (null = local)
+  log_model: true                  # Salvar modelo como artefato
+  log_predictions: true            # Salvar predições como artefato
+
+# Parâmetros do modelo LambdaMART com suporte para XGBoost e LightGBM
+model:
+  # ======== Configuração do Framework ========
+  framework: "xgboost"             # Framework: "xgboost" ou "lightgbm"
+  
+  # ======== Parâmetros Comuns ========
+  objective: "rank:ndcg"           # Objetivo de ranking
+  eval_metric: "ndcg"              # Métrica de avaliação
+  max_depth: 6                     # Profundidade máxima das árvores
+  learning_rate: 0.01              # Taxa de aprendizado (LightGBM usa learning_rate, XGBoost usa eta)
+  eta: 0.01                        # Taxa de aprendizado (XGBoost - será ignorado se framework for lightgbm)
+  subsample: 0.8                   # Fração de amostras para bagging
+  colsample_bytree: 0.9            # Fração de features para cada árvore (XGBoost)
+  feature_fraction: 0.9            # Fração de features para cada árvore (LightGBM)
+  min_child_weight: 1              # Peso mínimo por folha
+  alpha: 0.0                       # Regularização L1
+  lambda: 0.1                      # Regularização L2 (maior para IPS)
+  reg_alpha: 0.0                   # Regularização L1 (LightGBM)
+  reg_lambda: 0.1                  # Regularização L2 (LightGBM)
+  nthread: -1                      # Número de threads (-1 = usar todos)
+  num_threads: -1                  # Número de threads (LightGBM)
+  verbosity: 0                     # Nível de verbosidade
+  seed: 42                         # Seed para reprodutibilidade
+  
+  # ======== Parâmetros específicos do XGBoost ========
+  # (Aplicados apenas quando framework = "xgboost")
+  xgboost:
+    booster: "gbtree"              # Tipo de booster
+    # Parâmetros específicos para Learning to Rank
+    lambdarank_pair_method: "topk" # Método para construir pares: "mean" ou "topk"
+    lambdarank_num_pair_per_sample: 5 # Nível de truncamento para topk (foco nos top-5)
+    lambdarank_normalization: true # Normalizar valor das folhas por gradiente lambda
+    lambdarank_score_normalization: true # Normalizar métrica delta pela diferença de scores
+    # Configurações de IPS (Inverse Propensity Scoring)
+    lambdarank_unbiased: true      # HABILITAR debiasing dos dados de clique
+    lambdarank_bias_norm: 2.0      # Normalização para debiasing de posição (default: 2.0)
+    # Configurações de NDCG
+    ndcg_exp_gain: true            # Usar função de ganho exponencial para NDCG (2^relevance - 1)
+  
+  # ======== Parâmetros específicos do LightGBM ========
+  # (Aplicados apenas quando framework = "lightgbm")
+  lightgbm:
+    boosting_type: "gbdt"          # Tipo de boosting
+    num_leaves: 31                 # Número de folhas (substitui max_depth)
+    min_data_in_leaf: 20           # Dados mínimos por folha
+    # Note: LightGBM não suporta IPS nativamente
+
+# Configurações de treinamento
+training:
+  num_boost_round: 100             # Mais rounds para convergir com debiasing
+  early_stopping_rounds: 25       # Parada antecipada habilitada para IPS
+  validation_split: 0.0            # Fração para validação (0 = sem validação)
+
+# Configurações de avaliação
+evaluation:
+  k_values: [1, 3, 5, 10]         # Valores de k para NDCG@k
+
+# Configurações avançadas (opcional)
+advanced:
+  cross_validation:
+    enabled: true                 # Habilitar validação cruzada
+    n_folds: 5                    # Número de folds
+  
+  hyperparameter_tuning:
+    enabled: true                # HABILITADO para testar IPS com diferentes parâmetros
+    search_space:
+      eta: [0.01, 0.05, 0.1]      # Taxa de aprendizado para IPS
+      max_depth: [4, 6, 8]        # Profundidade das árvores
+      lambda: [0.0, 0.1, 0.5]     # Regularização L2
+      lambdarank_bias_norm: [1.0, 2.0, 3.0]  # Norma de bias para IPS
+
+# ======== Configurações específicas para IPS ========
+ips:
+  description: |
+    Inverse Propensity Scoring (IPS) é uma técnica para remover viés de posição
+    em dados de clique. Quando lambdarank_unbiased=true, o XGBoost automaticamente:
+    
+    1. Aplica pesos inversos baseados na propensão de clique por posição
+    2. Reduz o viés de que itens em posições superiores recebem mais cliques
+    3. Melhora a generalização para dados não vistos
+    
+    Parâmetros importantes:
+    - lambdarank_unbiased: true (habilita IPS)
+    - lambdarank_bias_norm: controla a intensidade do debiasing
+    - lambdarank_num_pair_per_sample: foco nos top-k itens
+    
+  evaluation:
+    focus_on_top_k: true           # Avaliar especialmente métricas top-k
+    compare_bias_metrics: true     # Comparar métricas de viés entre modelos

@@ -1,0 +1,75 @@
+# Configuração para treinamento do modelo LambdaMART
+
+# Configurações de dados
+data:
+  train_dir: "/Users/david/Documents/data/goldenset_paper/svm-format/copy/SDBN2"          # Diretório com arquivos de treino (.txt) ou arquivo único
+  test_dir: "/Users/david/Documents/data/goldenset_paper/colecao_manual.txt"            # Diretório com arquivos de teste (.txt) ou arquivo único
+
+# Configurações do MLflow
+mlflow:
+  experiment_name: "LambdaMART_copy_SDBN2"  # Nome do experimento
+  tracking_uri: null               # URI do tracking server (null = local)
+  log_model: true                  # Salvar modelo como artefato
+  log_predictions: true            # Salvar predições como artefato
+
+# Parâmetros do modelo LambdaMART (XGBoost)
+model:
+  objective: "rank:ndcg"           # Objetivo de ranking do XGBoost
+  eval_metric: "ndcg"              # Métrica de avaliação
+  booster: "gbtree"                # Tipo de booster
+  max_depth: 6                     # Profundidade máxima das árvores
+  eta: 0.001                         # Taxa de aprendizado (learning_rate)
+  subsample: 0.8                   # Fração de amostras para bagging
+  colsample_bytree: 0.9            # Fração de features para cada árvore
+  min_child_weight: 1              # Peso mínimo por folha
+  alpha: 0.0                       # Regularização L1
+  lambda: 0.0                      # Regularização L2
+  nthread: -1                      # Número de threads (-1 = usar todos)
+  silent: 1                        # Nível de verbosidade (0 = verbose, 1 = silent)
+  seed: 42                         # Seed para reprodutibilidade
+  
+  # ======== Parâmetros específicos para Learning to Rank ========
+  
+  # Configurações de LambdaRank para construção de pares
+  lambdarank_pair_method: "topk"   # Método para construir pares: "mean" ou "topk"
+  lambdarank_num_pair_per_sample: 1 # Número de pares por sample (mean) ou nível de truncamento (topk)
+  lambdarank_normalization: true   # Normalizar valor das folhas por gradiente lambda
+  lambdarank_score_normalization: true # Normalizar métrica delta pela diferença de scores
+  
+  # ======== Configurações de IPS (Inverse Propensity Scoring) ========
+  # Para remover viés de dados de clique brutos
+  lambdarank_unbiased: false       # Habilitar debiasing dos dados de clique
+  lambdarank_bias_norm: 2.0        # Normalização para debiasing de posição (default: 2.0)
+  
+  # ======== Configurações de NDCG ========
+  ndcg_exp_gain: true              # Usar função de ganho exponencial para NDCG (2^relevance - 1)
+
+# Configurações de treinamento
+training:
+  num_boost_round: 100             # Número de rounds de boosting
+  early_stopping_rounds: null     # Parada antecipada (null = desabilitado)
+  validation_split: 0.0            # Fração para validação (0 = sem validação)
+  
+  # Exemplos de configuração:
+  # early_stopping_rounds: null    # Sem parada antecipada (usa todos os rounds)
+  # early_stopping_rounds: 20      # Para após 20 rounds sem melhoria
+  # early_stopping_rounds: 50      # Para após 50 rounds sem melhoria
+
+# Configurações de avaliação
+evaluation:
+  k_values: [1, 3, 5, 10]         # Valores de k para NDCG@k
+
+# Configurações avançadas (opcional)
+advanced:
+  cross_validation:
+    enabled: false                 # Habilitar validação cruzada
+    n_folds: 5                    # Número de folds
+  
+  hyperparameter_tuning:
+    enabled: true                 # Habilitar busca de hiperparâmetros
+    search_space:
+      learning_rate: [0.01, 0.05, 0.1, 0.2]
+      num_leaves: [15, 31, 63, 127]
+      feature_fraction: [0.7, 0.8, 0.9, 1.0]
+
+  

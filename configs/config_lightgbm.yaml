@@ -1,0 +1,85 @@
+# Configuração para treinamento do modelo LambdaMART com LightGBM
+# Baseline sem IPS para comparação
+
+# Configurações de dados
+data:
+  train_dir: "/Users/david/Documents/data/goldenset_paper/svm-format/click/IPS"          # Diretório com arquivos de treino (.txt) ou arquivo único
+  test_dir: "/Users/david/Documents/data/goldenset_paper/colecao_manual.txt"            # Diretório com arquivos de teste (.txt) ou arquivo único
+
+# Configurações do MLflow
+mlflow:
+  experiment_name: "LambdaMART_LightGBM_baseline"  # Nome do experimento para LightGBM
+  tracking_uri: null               # URI do tracking server (null = local)
+  log_model: true                  # Salvar modelo como artefato
+  log_predictions: true            # Salvar predições como artefato
+
+# Parâmetros do modelo LambdaMART com LightGBM
+model:
+  # ======== Configuração do Framework ========
+  framework: "lightgbm"           # Framework: "lightgbm"
+  
+  # ======== Parâmetros Comuns ========
+  objective: "lambdarank"          # Objetivo de ranking do LightGBM
+  metric: "ndcg"                   # Métrica de avaliação
+  boosting_type: "gbdt"            # Tipo de boosting
+  num_leaves: 31                   # Número de folhas
+  max_depth: 6                     # Profundidade máxima das árvores
+  learning_rate: 0.01              # Taxa de aprendizado
+  feature_fraction: 0.9            # Fração de features para cada árvore
+  bagging_fraction: 0.8            # Fração de amostras para bagging
+  bagging_freq: 5                  # Frequência de bagging
+  min_data_in_leaf: 20             # Dados mínimos por folha
+  reg_alpha: 0.0                   # Regularização L1
+  reg_lambda: 0.1                  # Regularização L2
+  num_threads: -1                  # Número de threads (-1 = usar todos)
+  verbosity: -1                    # Nível de verbosidade (-1 = silent)
+  seed: 42                         # Seed para reprodutibilidade
+  
+  # ======== Parâmetros específicos do LightGBM ========
+  lightgbm:
+    label_gain: [0, 1, 2, 3, 4]    # Ganhos por label de relevância
+    max_position: 20               # Posição máxima para ranking
+    eval_at: [1, 3, 5, 10]         # Posições para avaliação NDCG
+
+# Configurações de treinamento
+training:
+  num_boost_round: 100             # Número de rounds de boosting
+  early_stopping_rounds: 25       # Parada antecipada
+  validation_split: 0.0            # Fração para validação (0 = sem validação)
+
+# Configurações de avaliação
+evaluation:
+  k_values: [1, 3, 5, 10]         # Valores de k para NDCG@k
+
+# Configurações avançadas (opcional)
+advanced:
+  cross_validation:
+    enabled: false                 # Habilitar validação cruzada
+    n_folds: 5                    # Número de folds
+  
+  hyperparameter_tuning:
+    enabled: false                # Tuning de hiperparâmetros
+    search_space:
+      learning_rate: [0.01, 0.05, 0.1]      # Taxa de aprendizado
+      max_depth: [4, 6, 8]                  # Profundidade das árvores
+      num_leaves: [15, 31, 63]              # Número de folhas
+      reg_lambda: [0.0, 0.1, 0.5]           # Regularização L2
+
+# ======== Informações sobre LightGBM ========
+lightgbm_info:
+  description: |
+    LightGBM é usado como baseline para comparação com XGBoost+IPS.
+    
+    Características:
+    - Não suporta IPS (Inverse Propensity Scoring) nativamente
+    - Otimizado para velocidade e eficiência de memória
+    - Excelente para datasets grandes
+    - Usa tree-based learning algoritm
+    
+    Comparação:
+    - XGBoost+IPS: Remove viés de posição, melhor generalização
+    - LightGBM: Baseline tradicional, treinamento mais rápido
+    
+  evaluation:
+    purpose: "baseline_comparison"   # Propósito: comparação baseline
+    focus_metrics: ["ndcg@10", "mrr"]  # Métricas principais para comparação
