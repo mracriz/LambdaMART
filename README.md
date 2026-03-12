@@ -38,35 +38,33 @@ LambdaMART/
 │   ├── config_lightgbm_tuning.yaml   # LightGBM com hyperparameter tuning
 │   └── config_lightgbm_test_tuning.yaml  # Teste rápido de tuning
 ├── main.py                  # Script principal unificado
-├── requirements.txt         # Dependências do projeto
+├── pyproject.toml           # Dependências gerenciadas pelo Poetry
+├── poetry.lock              # Lockfile do Poetry
 └── README.md               # Este arquivo
 ```
 
 ## 🛠️ Instalação
 
-### Dependências Necessárias
-```bash
-# Instalar dependências básicas
-pip install numpy pandas scikit-learn
+### Pré-requisitos
+- Python 3.9+
+- [Poetry](https://python-poetry.org/docs/#installation)
+- `libomp` (macOS, necessário para XGBoost): `brew install libomp`
 
-# XGBoost (obrigatório)
-pip install xgboost>=1.7.0
-
-# LightGBM (opcional, para usar framework LightGBM)
-pip install lightgbm
-
-# MLflow (para tracking de experimentos)
-pip install mlflow>=2.0.0
-
-# PyYAML (para arquivos de configuração)
-pip install pyyaml
-```
-
-### Instalação Rápida
+### Instalação
 ```bash
 git clone <repository-url>
 cd LambdaMART
-pip install -r requirements.txt
+poetry install
+```
+
+Para ativar o ambiente virtual:
+```bash
+poetry shell
+```
+
+Ou para executar comandos dentro do ambiente sem ativá-lo:
+```bash
+poetry run python main.py --config configs/config.yaml
 ```
 
 ## 📖 Uso
