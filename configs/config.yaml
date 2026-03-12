@@ -2,12 +2,12 @@
 
 # Configurações de dados
 data:
-  train_dir: "/Users/david/Documents/data/goldenset_paper/svm-format/copy/SDBN2"          # Diretório com arquivos de treino (.txt) ou arquivo único
-  test_dir: "/Users/david/Documents/data/goldenset_paper/colecao_manual.txt"            # Diretório com arquivos de teste (.txt) ou arquivo único
+  train_dir: "/Users/david/Documents/data/goldenset_paper/svm-format/copy/DCM"          # Diretório com arquivos de treino (.txt) ou arquivo único
+  test_dir: "/Users/david/Documents/data/goldenset_paper/svm-format/manual/manual_collection.txt"            # Diretório com arquivos de teste (.txt) ou arquivo único
 
 # Configurações do MLflow
 mlflow:
-  experiment_name: "LambdaMART_copy_SDBN2"  # Nome do experimento
+  experiment_name: "LambdaMART_copy_DCM"  # Nome do experimento
   tracking_uri: null               # URI do tracking server (null = local)
   log_model: true                  # Salvar modelo como artefato
   log_predictions: true            # Salvar predições como artefato

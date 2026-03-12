@@ -182,6 +182,21 @@ class MLflowManager:
         
         mlflow.log_metrics(prefixed_metrics)
     
+    def log_per_query_metrics(self, per_query_df: 'pd.DataFrame', dataset_name: str = "test"):
+        """
+        Log per-query metrics as a CSV artifact.
+        
+        Args:
+            per_query_df: DataFrame with per-query metrics (from RankingEvaluator.get_per_query_metrics_table)
+            dataset_name: Name of dataset (e.g., "test", "train")
+        """
+        csv_path = f"{dataset_name}_per_query_metrics.csv"
+        per_query_df.to_csv(csv_path, index=False)
+        mlflow.log_artifact(csv_path)
+        
+        if os.path.exists(csv_path):
+            os.remove(csv_path)
+    
     def log_training_metrics(self, training_history: Dict, step_key: str = "iteration"):
         """
         Log training metrics over time.

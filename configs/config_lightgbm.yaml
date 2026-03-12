@@ -3,12 +3,12 @@
 
 # Configurações de dados
 data:
-  train_dir: "/Users/david/Documents/data/goldenset_paper/svm-format/click/DCM"          # Diretório com arquivos de treino (.txt) ou arquivo único
-  test_dir: "/Users/david/Documents/data/goldenset_paper/colecao_manual.txt"            # Diretório com arquivos de teste (.txt) ou arquivo único
+  train_dir: "/Users/david/Documents/data/goldenset_paper/svm-format/manual/Folds/Fold5"          # Diretório com arquivos de treino (.txt) ou arquivo único
+  test_dir: "/Users/david/Documents/data/goldenset_paper/svm-format/manual/Folds/Fold5/test.txt"            # Diretório com arquivos de teste (.txt) ou arquivo único
 
 # Configurações do MLflow
 mlflow:
-  experiment_name: "LambdaMART_LightGBM_DCM_Click"  # Nome do experimento para LightGBM
+  experiment_name: "Manual_Collection_Fold1"  # Nome do experimento para LightGBM
   tracking_uri: null               # URI do tracking server (null = local)
   log_model: true                  # Salvar modelo como artefato
   log_predictions: true            # Salvar predições como artefato
@@ -44,7 +44,7 @@ model:
 # Configurações de treinamento
 training:
   num_boost_round: 100             # Número de rounds de boosting
-  early_stopping_rounds: null      # Parada antecipada (null = desabilitado)
+  early_stopping_rounds: null      `# Parada antecipada (null = desabilitado)
   validation_split: 0.0            # Fração para validação (0 = sem validação)
 
 # Configurações de avaliação
@@ -58,14 +58,11 @@ advanced:
     n_folds: 5                    # Número de folds
   
   hyperparameter_tuning:
-    enabled: true                # Tuning de hiperparâmetros (ative quando necessário)
+    enabled: true                 # Habilitar busca de hiperparâmetros
     search_space:
-      learning_rate: [0.05, 0.1, 0.01]       # Taxa de aprendizado (valores mais altos)
-      max_depth: [4, 6, 8]                  # Profundidade das árvores
-      num_leaves: [15, 31, 63]              # Número de folhas
-      reg_lambda: [0.0, 0.1, 0.5]           # Regularização L2
-      feature_fraction: [0.8, 0.9, 1.0]     # Fração de features
-      bagging_fraction: [0.7, 0.8, 0.9]     # Fração para bagging
+      learning_rate: [0.01]
+      num_leaves: [31, 63, 127]
+      feature_fraction: [0.9]
 
 # ======== Informações sobre LightGBM ========
 lightgbm_info:

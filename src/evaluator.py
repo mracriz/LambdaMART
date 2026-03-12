@@ -4,6 +4,7 @@ Implements NDCG@k and MRR (Mean Reciprocal Rank) metrics.
 """
 
 import numpy as np
+import pandas as pd
 from typing import Dict, List, Tuple, Optional
 import warnings
 
@@ -36,9 +37,7 @@ class RankingEvaluator:
         if k == 0:
             return 0.0
             
-        # DCG formula: sum((2^rel_i - 1) / log2(i + 2)) for i in [0, k-1]
-        # This matches the formula used in allRank and many standard implementations
-        discounts = np.log2(np.arange(len(relevance_scores[:k])) + 2)  # log2(2), log2(3), ..., log2(k+1)
+        discounts = np.log2(np.arange(len(relevance_scores[:k])) + 2)
         dcg = np.sum((np.power(2, relevance_scores[:k]) - 1) / discounts)
         
         return dcg
@@ -47,30 +46,17 @@ class RankingEvaluator:
     def ndcg_at_k(true_relevance: np.ndarray, predicted_scores: np.ndarray, k: int) -> float:
         """
         Calculate Normalized Discounted Cumulative Gain at k.
-        
-        Args:
-            true_relevance: True relevance scores
-            predicted_scores: Predicted scores
-            k: Cut-off rank
-            
-        Returns:
-            NDCG@k value
         """
         if len(true_relevance) == 0 or k <= 0:
             return 0.0
         
-        # Sort by predicted scores (descending)
         sorted_indices = np.argsort(predicted_scores)[::-1]
         sorted_relevance = true_relevance[sorted_indices]
         
-        # Calculate DCG@k
         dcg_k = RankingEvaluator.dcg_at_k(sorted_relevance, k)
-        
-        # Calculate IDCG@k (Ideal DCG)
-        ideal_relevance = np.sort(true_relevance)[::-1]  # Sort true relevance descending
+        ideal_relevance = np.sort(true_relevance)[::-1]
         idcg_k = RankingEvaluator.dcg_at_k(ideal_relevance, k)
         
-        # Avoid division by zero
         if idcg_k == 0:
             return 0.0
             
@@ -79,44 +65,44 @@ class RankingEvaluator:
     @staticmethod
     def mrr_single_query(true_relevance: np.ndarray, predicted_scores: np.ndarray) -> float:
         """
-        Calculate Mean Reciprocal Rank for a single query.
-        
-        Args:
-            true_relevance: True relevance scores
-            predicted_scores: Predicted scores
-            
-        Returns:
-            Reciprocal rank (1/rank of first relevant document, 0 if none)
+        Calculate Mean Reciprocal Rank for a single query (full ranking).
         """
         if len(true_relevance) == 0:
             return 0.0
         
-        # Sort by predicted scores (descending)
         sorted_indices = np.argsort(predicted_scores)[::-1]
         sorted_relevance = true_relevance[sorted_indices]
-        
-        # Find first relevant document (relevance > 0)
         relevant_positions = np.where(sorted_relevance > 0)[0]
         
         if len(relevant_positions) == 0:
             return 0.0
         
-        # Return reciprocal of the rank (1-indexed)
+        first_relevant_rank = relevant_positions[0] + 1
+        return 1.0 / first_relevant_rank
+    
+    @staticmethod
+    def mrr_at_k(true_relevance: np.ndarray, predicted_scores: np.ndarray, k: int) -> float:
+        """
+        Calculate Mean Reciprocal Rank at k (MRR@k).
+        Returns reciprocal rank of first relevant document within top-k, 0 if none.
+        """
+        if len(true_relevance) == 0 or k <= 0:
+            return 0.0
+        
+        sorted_indices = np.argsort(predicted_scores)[::-1]
+        sorted_relevance = true_relevance[sorted_indices]
+        relevant_positions = np.where(sorted_relevance[:k] > 0)[0]
+        
+        if len(relevant_positions) == 0:
+            return 0.0
+        
         first_relevant_rank = relevant_positions[0] + 1
         return 1.0 / first_relevant_rank
     
     def evaluate_query(self, true_relevance: np.ndarray, predicted_scores: np.ndarray,
                       k_values: List[int] = [1, 3, 5, 10]) -> Dict[str, float]:
         """
-        Evaluate a single query with NDCG@k and MRR metrics.
-        
-        Args:
-            true_relevance: True relevance scores
-            predicted_scores: Predicted scores
-            k_values: List of k values for NDCG@k
-            
-        Returns:
-            Dictionary with metric values
+        Evaluate a single query with NDCG@k and MRR@k metrics.
         """
         metrics = {}
         
@@ -125,9 +111,14 @@ class RankingEvaluator:
             ndcg_k = self.ndcg_at_k(true_relevance, predicted_scores, k)
             metrics[f'ndcg@{k}'] = ndcg_k
         
-        # Calculate MRR
+        # Calculate MRR (full ranking)
         mrr = self.mrr_single_query(true_relevance, predicted_scores)
         metrics['mrr'] = mrr
+        
+        # Calculate MRR@k for each k
+        for k in k_values:
+            mrr_k = self.mrr_at_k(true_relevance, predicted_scores, k)
+            metrics[f'mrr@{k}'] = mrr_k
         
         return metrics
     
@@ -135,15 +126,6 @@ class RankingEvaluator:
                         query_ids: np.ndarray, k_values: List[int] = [1, 3, 5, 10]) -> Dict[str, float]:
         """
         Evaluate ranking performance across multiple queries.
-        
-        Args:
-            true_labels: True relevance labels
-            predicted_scores: Predicted scores
-            query_ids: Query IDs
-            k_values: List of k values for NDCG@k
-            
-        Returns:
-            Dictionary with averaged metric values
         """
         if len(true_labels) != len(predicted_scores) or len(true_labels) != len(query_ids):
             raise ValueError("Input arrays must have the same length")
@@ -152,16 +134,13 @@ class RankingEvaluator:
         all_metrics = []
         
         for qid in unique_queries:
-            # Get data for this query
             query_mask = query_ids == qid
             query_true_labels = true_labels[query_mask]
             query_predicted_scores = predicted_scores[query_mask]
             
-            # Skip queries with no relevant documents
             if np.sum(query_true_labels) == 0:
                 continue
             
-            # Evaluate this query
             query_metrics = self.evaluate_query(
                 query_true_labels, query_predicted_scores, k_values
             )
@@ -169,15 +148,15 @@ class RankingEvaluator:
         
         if not all_metrics:
             warnings.warn("No queries with relevant documents found")
-            return {f'ndcg@{k}': 0.0 for k in k_values} | {'mrr': 0.0}
+            default_metrics = {f'ndcg@{k}': 0.0 for k in k_values}
+            default_metrics.update({'mrr': 0.0, 'mrr@1': 0.0, 'mrr@3': 0.0, 'mrr@5': 0.0, 'mrr@10': 0.0})
+            return default_metrics
         
-        # Average metrics across queries
         averaged_metrics = {}
         for metric_name in all_metrics[0].keys():
             metric_values = [m[metric_name] for m in all_metrics]
             averaged_metrics[metric_name] = np.mean(metric_values)
         
-        # Store evaluation results
         self.metrics_history.append({
             'metrics': averaged_metrics,
             'num_queries': len(all_metrics),
@@ -191,14 +170,6 @@ class RankingEvaluator:
                                  k_values: List[int] = [1, 3, 5, 10]) -> Dict[str, float]:
         """
         Evaluate model predictions organized by query.
-        
-        Args:
-            model_predictions: Dictionary mapping query_id to predicted scores
-            true_labels_by_query: Dictionary mapping query_id to true labels
-            k_values: List of k values for NDCG@k
-            
-        Returns:
-            Dictionary with averaged metric values
         """
         all_metrics = []
         
@@ -213,19 +184,18 @@ class RankingEvaluator:
                 warnings.warn(f"Mismatch in lengths for query {qid}")
                 continue
             
-            # Skip queries with no relevant documents
             if np.sum(true_labels) == 0:
                 continue
             
-            # Evaluate this query
             query_metrics = self.evaluate_query(true_labels, predicted_scores, k_values)
             all_metrics.append(query_metrics)
         
         if not all_metrics:
             warnings.warn("No valid queries found for evaluation")
-            return {f'ndcg@{k}': 0.0 for k in k_values} | {'mrr': 0.0}
+            default_metrics = {f'ndcg@{k}': 0.0 for k in k_values}
+            default_metrics.update({'mrr': 0.0, 'mrr@1': 0.0, 'mrr@3': 0.0, 'mrr@5': 0.0, 'mrr@10': 0.0})
+            return default_metrics
         
-        # Average metrics across queries
         averaged_metrics = {}
         for metric_name in all_metrics[0].keys():
             metric_values = [m[metric_name] for m in all_metrics]
@@ -237,15 +207,6 @@ class RankingEvaluator:
                                query_ids: np.ndarray, k_values: List[int] = [1, 3, 5, 10]) -> Dict:
         """
         Get detailed evaluation results including per-query metrics.
-        
-        Args:
-            true_labels: True relevance labels
-            predicted_scores: Predicted scores
-            query_ids: Query IDs
-            k_values: List of k values for NDCG@k
-            
-        Returns:
-            Dictionary with detailed evaluation results
         """
         unique_queries = np.unique(query_ids)
         per_query_metrics = {}
@@ -256,7 +217,6 @@ class RankingEvaluator:
             query_true_labels = true_labels[query_mask]
             query_predicted_scores = predicted_scores[query_mask]
             
-            # Skip queries with no relevant documents
             if np.sum(query_true_labels) == 0:
                 continue
             
@@ -266,7 +226,6 @@ class RankingEvaluator:
             per_query_metrics[qid] = query_metrics
             valid_queries.append(qid)
         
-        # Calculate overall metrics
         overall_metrics = self.evaluate_ranking(true_labels, predicted_scores, query_ids, k_values)
         
         return {
@@ -277,22 +236,86 @@ class RankingEvaluator:
             'valid_query_ids': valid_queries
         }
     
+    def get_per_query_metrics_table(self, true_labels: np.ndarray, predicted_scores: np.ndarray,
+                                   query_ids: np.ndarray, k_values: List[int] = [1, 3, 5, 10]) -> pd.DataFrame:
+        """
+        Get per-query metrics as a pandas DataFrame for easy export to CSV.
+        
+        Columns:
+        - query_id: Query identifier
+        - num_docs: Number of documents for this query
+        - num_relevant_docs: Number of relevant documents (relevance > 0)
+        - ndcg@k: NDCG at k for each k in k_values
+        - mrr: Mean Reciprocal Rank
+        - mrr@1: MRR at position 1 (binary: relevant in top-1 or not)
+        
+        Args:
+            true_labels: True relevance labels
+            predicted_scores: Predicted scores
+            query_ids: Query IDs
+            k_values: List of k values for NDCG@k
+            
+        Returns:
+            pandas DataFrame with per-query metrics
+        """
+        unique_queries = np.unique(query_ids)
+        rows = []
+        
+        for qid in unique_queries:
+            query_mask = query_ids == qid
+            query_true_labels = true_labels[query_mask]
+            query_predicted_scores = predicted_scores[query_mask]
+            
+            # Count documents and relevant documents
+            num_docs = len(query_true_labels)
+            num_relevant_docs = int(np.sum(query_true_labels > 0))
+            
+            # Skip queries with no relevant documents for metric calculation
+            if num_relevant_docs == 0:
+                # Still add row but with 0 metrics
+                row = {'query_id': qid, 'num_docs': num_docs, 'num_relevant_docs': num_relevant_docs}
+                for k in k_values:
+                    row[f'ndcg@{k}'] = 0.0
+                row['mrr'] = 0.0
+                row['mrr@1'] = 0.0
+                rows.append(row)
+                continue
+            
+            # Calculate metrics for this query
+            query_metrics = self.evaluate_query(query_true_labels, query_predicted_scores, k_values)
+            
+            # Build row for this query
+            row = {
+                'query_id': qid,
+                'num_docs': num_docs,
+                'num_relevant_docs': num_relevant_docs
+            }
+            
+            # Add all metrics
+            for metric_name, metric_value in query_metrics.items():
+                row[metric_name] = float(metric_value)
+            
+            rows.append(row)
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(rows)
+        
+        # Reorder columns: query_id, num_docs, num_relevant_docs, then metrics
+        metric_cols = [f'ndcg@{k}' for k in k_values] + ['mrr', 'mrr@1']
+        cols = ['query_id', 'num_docs', 'num_relevant_docs'] + metric_cols
+        df = df[cols]
+        
+        return df
+    
     def compare_models(self, model_results: Dict[str, Dict]) -> Dict:
         """
         Compare multiple model evaluation results.
-        
-        Args:
-            model_results: Dictionary mapping model_name to evaluation results
-            
-        Returns:
-            Comparison summary
         """
         comparison = {
             'model_names': list(model_results.keys()),
             'metrics_comparison': {}
         }
         
-        # Get all metric names
         first_model = list(model_results.values())[0]
         metric_names = first_model['overall_metrics'].keys()
         
@@ -302,7 +325,6 @@ class RankingEvaluator:
                 comparison['metrics_comparison'][metric][model_name] = \
                     results['overall_metrics'][metric]
         
-        # Find best model for each metric
         comparison['best_models'] = {}
         for metric in metric_names:
             best_model = max(model_results.keys(),
@@ -314,27 +336,20 @@ class RankingEvaluator:
     def print_evaluation_summary(self, evaluation_results: Dict):
         """
         Print a formatted summary of evaluation results.
-        
-        Args:
-            evaluation_results: Results from get_detailed_evaluation() or direct metrics
         """
         print("\n" + "="*60)
         print("RANKING EVALUATION SUMMARY")
         print("="*60)
         
-        # Handle different input formats
         if 'overall_metrics' in evaluation_results:
-            # Legacy format from get_detailed_evaluation()
             overall = evaluation_results['overall_metrics']
             num_queries = evaluation_results.get('num_valid_queries', 'N/A')
             total_queries = evaluation_results.get('num_total_queries', 'N/A')
         elif 'test' in evaluation_results:
-            # New format - extract metrics directly
             overall = evaluation_results['test']
             num_queries = 'N/A'
             total_queries = 'N/A'
         else:
-            # Direct metrics format
             overall = evaluation_results
             num_queries = 'N/A'
             total_queries = 'N/A'
@@ -359,20 +374,16 @@ if __name__ == "__main__":
     # Example usage and testing
     print("Testing Ranking Evaluator...")
     
-    # Create sample data
     np.random.seed(42)
     
-    # Sample query with known ranking
-    true_relevance = np.array([3, 2, 1, 0, 2])  # Relevance scores
-    predicted_scores = np.array([0.9, 0.7, 0.5, 0.2, 0.8])  # Predicted scores
+    true_relevance = np.array([3, 2, 1, 0, 2])
+    predicted_scores = np.array([0.9, 0.7, 0.5, 0.2, 0.8])
     
     evaluator = RankingEvaluator()
     
-    # Test single query evaluation
     metrics = evaluator.evaluate_query(true_relevance, predicted_scores)
     print("Single query metrics:", metrics)
     
-    # Test multiple queries evaluation
     n_docs_per_query = 5
     n_queries = 3
     

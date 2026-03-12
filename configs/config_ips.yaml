@@ -4,7 +4,7 @@
 # Configurações de dados
 data:
   train_dir: "/Users/david/Documents/data/goldenset_paper/svm-format/copy/IPS"          # Diretório com arquivos de treino (.txt) ou arquivo único
-  test_dir: "/Users/david/Documents/data/goldenset_paper/colecao_manual.txt"            # Diretório com arquivos de teste (.txt) ou arquivo único
+  test_dir: "/Users/david/Documents/data/goldenset_paper/svm-format/manual/manual_collection.txt"            # Diretório com arquivos de teste (.txt) ou arquivo único
 
 # Configurações do MLflow
 mlflow:
@@ -42,13 +42,13 @@ model:
   xgboost:
     booster: "gbtree"              # Tipo de booster
     # Parâmetros específicos para Learning to Rank
-    lambdarank_pair_method: "topk" # Método para construir pares: "mean" ou "topk"
-    lambdarank_num_pair_per_sample: 5 # Nível de truncamento para topk (foco nos top-5)
-    lambdarank_normalization: true # Normalizar valor das folhas por gradiente lambda
-    lambdarank_score_normalization: true # Normalizar métrica delta pela diferença de scores
+    #lambdarank_pair_method: "topk" # Método para construir pares: "mean" ou "topk"
+    #lambdarank_num_pair_per_sample: 5 # Nível de truncamento para topk (foco nos top-5)
+    #lambdarank_normalization: true # Normalizar valor das folhas por gradiente lambda
+    #lambdarank_score_normalization: true # Normalizar métrica delta pela diferença de scores
     # Configurações de IPS (Inverse Propensity Scoring)
     lambdarank_unbiased: true      # HABILITAR debiasing dos dados de clique
-    lambdarank_bias_norm: 2.0      # Normalização para debiasing de posição (default: 2.0)
+    lambdarank_bias_norm: 1.0      # Normalização para debiasing de posição (default: 2.0)
     # Configurações de NDCG
     ndcg_exp_gain: true            # Usar função de ganho exponencial para NDCG (2^relevance - 1)
   

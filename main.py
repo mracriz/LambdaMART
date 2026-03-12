@@ -32,6 +32,24 @@ def load_config(config_path: str) -> Dict[str, Any]:
     """
     with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
+    
+    # Verificar se há variáveis de ambiente para automação
+    signal = os.environ.get('LAMBDAMART_SIGNAL')
+    method = os.environ.get('LAMBDAMART_METHOD')
+    
+    if signal and method:
+        print(f"🤖 Automação detectada: {method}_{signal.upper()}")
+        
+        # Atualizar caminhos dos dados
+        base_path = "/Users/david/Documents/data/goldenset_paper/svm-format"
+        config['data']['train_dir'] = f"{base_path}/{signal}/{method}"
+        
+        # Atualizar nome do experimento MLflow
+        config['mlflow']['experiment_name'] = f"LambdaMART_LightGBM_{method}_{signal.title()}"
+        
+        print(f"📁 Train dir: {config['data']['train_dir']}")
+        print(f"🏷️  Experimento: {config['mlflow']['experiment_name']}")
+    
     return config
 
 
@@ -267,6 +285,14 @@ def train_and_evaluate(config: Dict[str, Any], framework: str = "xgboost") -> Di
             metrics_converted[key] = float(value)
     
     mlflow_manager.log_evaluation_metrics(metrics_converted, prefix="test_")
+    
+    # Log das métricas por query como CSV (artefato)
+    per_query_df = evaluator.get_per_query_metrics_table(
+        test_labels, predictions, test_qids,
+        k_values=config['evaluation']['k_values']
+    )
+    mlflow_manager.log_per_query_metrics(per_query_df, dataset_name="test")
+    print(f"📊 Métricas por query salvas como artefato no MLflow")
     
     # Log do modelo como artefato
     if config['mlflow'].get('log_model', True):

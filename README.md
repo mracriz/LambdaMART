@@ -91,13 +91,28 @@ python main.py --config configs/config_lightgbm.yaml
 # Teste rápido (4 combinações)
 python main.py --config configs/config_lightgbm_test_tuning.yaml
 
-# Tuning completo (6,144 combinações)
+# Tuning completo (64 combinações)
 python main.py --config configs/config_lightgbm_tuning.yaml
 ```
 
-### 5. Especificar Framework Manualmente
+### 5. Automação de Múltiplos Experimentos
+```bash
+# Teste rápido de todas as combinações (sem tuning)
+python3 run_quick_test.py
+
+# Execução completa com hyperparameter tuning
+python3 run_all_experiments.py
+```
+
+### 6. Especificar Framework Manualmente
 ```bash
 python main.py --config configs/config.yaml --framework lightgbm
+```
+
+### 7. Execução Manual com Variáveis de Ambiente
+```bash
+# Executar experimento específico
+LAMBDAMART_SIGNAL=click LAMBDAMART_METHOD=CCM python3 main.py --config configs/config_lightgbm.yaml
 ```
 
 ## ⚙️ Configuração
@@ -171,7 +186,69 @@ data/
     └── test.txt
 ```
 
-## 🧪 Cenários de Uso
+## � Automação de Experimentos
+
+### Scripts de Automação Disponíveis
+
+#### 1. Teste Rápido (`run_quick_test.py`)
+Valida rapidamente todas as combinações sem hyperparameter tuning:
+```bash
+python3 run_quick_test.py
+```
+- **Objetivo**: Verificar se todas as combinações funcionam
+- **Tempo**: ~2-3 min por experimento
+- **Total**: ~20-30 minutos para todas as combinações
+
+#### 2. Automação Completa (`run_all_experiments.py`)
+Executa hyperparameter tuning para todas as combinações:
+```bash
+python3 run_all_experiments.py
+```
+- **Objetivo**: Encontrar os melhores hiperparâmetros para cada combinação
+- **Tempo**: ~30-60 min por experimento (64 trials cada)
+- **Total**: ~5-10 horas para todas as combinações
+
+### Combinações Executadas
+O sistema automaticamente executa experimentos para:
+
+**Signals**: `click`, `copy`
+**Methods**: `DCM`, `CCM`, `DBN`, `SDBN`, `SDBN2`
+
+**Total**: 10 experimentos (2 × 5 combinações)
+
+### Estrutura dos Dados Esperada
+```
+/Users/david/Documents/data/goldenset_paper/svm-format/
+├── click/
+│   ├── DCM/
+│   ├── CCM/
+│   ├── DBN/
+│   ├── SDBN/
+│   └── SDBN2/
+└── copy/
+    ├── DCM/
+    ├── CCM/
+    ├── DBN/
+    ├── SDBN/
+    └── SDBN2/
+```
+
+### Experimentos MLflow Gerados
+Cada combinação gera um experimento separado no MLflow:
+- `LambdaMART_LightGBM_DCM_Click`
+- `LambdaMART_LightGBM_DCM_Copy`
+- `LambdaMART_LightGBM_CCM_Click`
+- `LambdaMART_LightGBM_CCM_Copy`
+- ... e assim por diante
+
+### Personalização da Automação
+Para modificar os hiperparâmetros ou adicionar novas combinações:
+
+1. **Editar hiperparâmetros**: Modifique `configs/config_lightgbm.yaml`
+2. **Adicionar signals/methods**: Modifique as listas em `run_all_experiments.py`
+3. **Ajustar timeout**: Modifique `timeout=7200` no script (em segundos)
+
+## �🧪 Cenários de Uso
 
 ### 1. Comparação de Frameworks
 Execute os mesmos dados com diferentes frameworks para comparar performance:
